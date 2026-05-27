@@ -1,0 +1,3 @@
+{"sku":"BEAN-0001","name":"Test Bean One","variants":[{"sku_variant":"BEAN-0001-250g-ESP","size":"250g","grind":"espresso","price_eur":12.5,"stock":10}]}
+{"sku":"BEAN-0002","name":"Test Bean Two","variants":[{"sku_variant":"BEAN-0002-100g-FIL","size":"100g","grind":"filter","price_eur":8.0,"stock":5}]}
+{"sku":"BEAN-0003","name":"Test Bean Three","variants":[{"sku_variant":"BEAN-0003-1kg-MOK","size":"1kg","grind":"moka","price_eur":45.0,"stock":20}]}

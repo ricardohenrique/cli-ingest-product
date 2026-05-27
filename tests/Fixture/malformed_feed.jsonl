@@ -1,0 +1,3 @@
+{"sku":"BEAN-0001","name":"Good One","variants":[{"sku_variant":"V1","size":"250g","grind":"espresso","price_eur":12.5,"stock":10}]}
+{this is not valid json}
+{"sku":"BEAN-0003","name":"Good Three","variants":[{"sku_variant":"V3","size":"100g","grind":"filter","price_eur":8.0,"stock":5}]}
