@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20260528000001 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Create flattened_products table';
+    }
+
+    public function up(Schema $schema): void
+    {
+        $this->addSql(<<<'SQL'
+            CREATE TABLE flattened_products (
+                id                          bigserial       PRIMARY KEY,
+                sku                         varchar(64)     NOT NULL,
+                name                        varchar(255)    NOT NULL,
+                origin_country              varchar(128)    NOT NULL,
+                origin_region               varchar(128)    NOT NULL,
+                origin_farm                 varchar(128)    NOT NULL,
+                origin_altitude_m           int             NULL,
+                origin_process              varchar(64)     NOT NULL,
+                origin_coordinates_lat      numeric(9,6)    NULL,
+                origin_coordinates_lng      numeric(9,6)    NULL,
+                roast_level                 varchar(32)     NOT NULL,
+                roast_roasted_on            date            NOT NULL,
+                roast_roaster               varchar(128)    NOT NULL,
+                flavor_notes                text            NOT NULL DEFAULT '',
+                tags                        text            NOT NULL DEFAULT '',
+                tasting_score_acidity       smallint        NOT NULL,
+                tasting_score_body          smallint        NOT NULL,
+                tasting_score_sweetness     smallint        NOT NULL,
+                tasting_score_aroma         smallint        NOT NULL,
+                tasting_score_bitterness    smallint        NOT NULL,
+                in_stock                    boolean         NOT NULL,
+                description                 text            NULL,
+                variant_sku                 varchar(128)    NOT NULL,
+                variant_size                varchar(16)     NOT NULL,
+                variant_grind               varchar(32)     NOT NULL,
+                variant_price_eur           numeric(10,2)   NOT NULL,
+                variant_stock               int             NOT NULL,
+                variant_index               smallint        NOT NULL
+            )
+        SQL);
+    }
+
+    public function down(Schema $schema): void
+    {
+        $this->addSql('DROP TABLE flattened_products');
+    }
+}

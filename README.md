@@ -16,17 +16,17 @@ cd cli-ingest-product
 # 2. Build the app image
 docker compose build app
 
-# 3. Bring up the database (first run applies init.sql automatically)
-docker compose up -d postgres
+# 3. Bring up the stack — migrations run automatically on first start
+docker compose up -d
 
 # 4. Run the ingestion (the docs/ folder is mounted at /data inside the container)
-docker compose run --rm app bin/console feed:ingest /data/coffee_feed.jsonl
+docker compose exec app bin/console feed:ingest data/coffee_feed.jsonl
 
 # 5. Or write to CSV instead of PostgreSQL
-docker compose run --rm app bin/console feed:ingest /data/coffee_feed.jsonl --output=csv
+docker compose exec app bin/console feed:ingest data/coffee_feed.jsonl --output=csv
 
 # 6. Or use the env variable instead of the argument
-docker compose run --rm -e FEED_INPUT_PATH=/data/coffee_feed.jsonl app bin/console feed:ingest
+docker compose exec app -e FEED_INPUT_PATH=data/coffee_feed.jsonl app bin/console feed:ingest
 ```
 
 On success the command prints a summary table:
@@ -49,6 +49,16 @@ docker compose run --rm app vendor/bin/phpunit --exclude-group integration
 
 # Full suite including DB integration tests
 docker compose run --rm app vendor/bin/phpunit
+```
+
+### Adding a schema change
+
+```bash
+# Generate a new empty migration
+docker compose run --rm app bin/console doctrine:migrations:generate
+
+# Edit the generated file in migrations/, then apply it
+docker compose run --rm app bin/console doctrine:migrations:migrate --no-interaction
 ```
 
 ---
