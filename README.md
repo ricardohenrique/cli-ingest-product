@@ -45,20 +45,20 @@ Exit code 0 on success, 1 on infrastructure failure (unreadable file, DB unreach
 
 ```bash
 # Unit + functional tests (no DB required)
-docker compose run --rm app vendor/bin/phpunit --exclude-group integration
+docker compose exec app vendor/bin/phpunit --exclude-group integration
 
 # Full suite including DB integration tests
-docker compose run --rm app vendor/bin/phpunit
+docker compose exec app vendor/bin/phpunit
 ```
 
 ### Adding a schema change
 
 ```bash
 # Generate a new empty migration
-docker compose run --rm app bin/console doctrine:migrations:generate
+docker compose exec app bin/console doctrine:migrations:generate
 
 # Edit the generated file in migrations/, then apply it
-docker compose run --rm app bin/console doctrine:migrations:migrate --no-interaction
+docker compose exec app bin/console doctrine:migrations:migrate --no-interaction
 ```
 
 ---
