@@ -75,6 +75,10 @@ The `FeedReaderPort` yields `ReadResult` values (either success or failure) rath
 
 `DoctrineFlattenedProductWriter` maps rows to a fixed set of 28 columns defined in `docker/db/init.sql`. Unknown keys are dropped with a debug log. This avoids runtime DDL, keeps the schema auditable, and makes the writer simple. Schema evolution = a new migration.
 
+### Idempotency
+
+Re-running `feed:ingest` on the same file is safe. The writer uses PostgreSQL `INSERT ... ON CONFLICT (sku, variant_sku) DO UPDATE SET ...`, so duplicate rows are updated in place rather than causing a constraint violation. The composite business key `(sku, variant_sku)` matches the natural grain of the flattened output — one row per product variant. If a column is absent in a sparse row, the existing stored value is preserved rather than overwritten.
+
 ### Chunked writes
 
 Rows are inserted in configurable chunks of 500 (default). Each chunk is its own transaction, so a failure rolls back only the failing chunk. This trades strict all-or-nothing atomicity for resilience on large feeds.
@@ -104,7 +108,6 @@ Infrastructure adapters never let their own exceptions leak past the domain boun
 
 - **Domain events** — emit `ProductFeedIngested` and `ProductRowSkipped` events for external observability (metrics, alerting).
 - **Configurable output adapters** — a `SqliteFlattenedProductWriter` would be trivial to add; the port interface already isolates the choice.
-- **Idempotent writes** — `INSERT ... ON CONFLICT (variant_sku) DO UPDATE` to make re-runs safe without manual truncation.
 - **Schema introspection** — derive columns dynamically from the first batch of rows rather than hard-coding them, so the writer generalises beyond this specific feed.
 - **Parallel processing** — split the file into chunks and process each in a worker process via Symfony Messenger.
 - **Structured run log** — persist `IngestProductFeedResult` to a `feed_runs` table for audit history.

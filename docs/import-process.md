@@ -210,3 +210,13 @@ If there were skipped records, each error is listed below the table with its lin
 | `src/Infrastructure/Persistence/DoctrineFlattenedProductWriter.php` | Infrastructure | Implements `RowWriterPort`; inserts rows in chunks via Doctrine DBAL |
 | `migrations/Version20260528000001.php` | Infrastructure | Doctrine migration that creates the `flattened_products` table |
 | `config/services.yaml` | Config | Wires `FeedReaderPort` → `JsonlProductFeedReader` and `RowWriterPort` → `DoctrineFlattenedProductWriter` |
+
+---
+
+## Idempotency
+
+Re-running `feed:ingest` on the same file is safe. The writer uses PostgreSQL `INSERT ... ON CONFLICT (sku, variant_sku) DO UPDATE SET ...`, so duplicate rows are updated in place rather than inserted again. The business key is the combination of `sku` + `variant_sku` — one row per product variant.
+
+**Assumption:** `(sku, variant_sku)` pairs are globally unique across the upstream feed. If two distinct products share the same pair, the latest-ingested row silently wins.
+
+**Sparse rows:** if a column is absent in the incoming record, it is omitted from the `INSERT` and therefore not present in `EXCLUDED` — the existing stored value is preserved rather than overwritten with null.

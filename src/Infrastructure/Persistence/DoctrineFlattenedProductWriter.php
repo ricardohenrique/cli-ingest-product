@@ -16,6 +16,9 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
     private const TABLE = 'flattened_products';
     private const DEFAULT_CHUNK_SIZE = 500;
 
+    /** @var list<string> */
+    private const KEY_COLUMNS = ['sku', 'variant_sku'];
+
     private const COLUMNS = [
         'sku', 'name',
         'origin_country', 'origin_region', 'origin_farm',
@@ -80,7 +83,11 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
         try {
             foreach ($rows as $row) {
                 [$data, $types] = $this->mapToColumns($row);
-                $this->connection->insert(self::TABLE, $data, $types);
+                $this->connection->executeStatement(
+                    $this->buildUpsertSql(array_keys($data)),
+                    $data,
+                    $types,
+                );
             }
             $this->connection->commit();
         } catch (\Throwable $e) {
@@ -111,5 +118,31 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
         }
 
         return [$data, $types];
+    }
+
+    /** @param list<string> $columns */
+    private function buildUpsertSql(array $columns): string
+    {
+        $columnList = implode(', ', $columns);
+        $paramList  = implode(', ', array_map(static fn (string $c) => ':'.$c, $columns));
+
+        $updateColumns = array_filter(
+            $columns,
+            static fn (string $c) => !in_array($c, self::KEY_COLUMNS, true),
+        );
+
+        $setClauses = implode(
+            ', ',
+            array_map(static fn (string $c) => $c.' = EXCLUDED.'.$c, $updateColumns),
+        );
+
+        return sprintf(
+            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s',
+            self::TABLE,
+            $columnList,
+            $paramList,
+            implode(', ', self::KEY_COLUMNS),
+            $setClauses,
+        );
     }
 }

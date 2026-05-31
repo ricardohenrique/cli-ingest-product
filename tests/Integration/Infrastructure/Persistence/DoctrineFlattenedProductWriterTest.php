@@ -31,7 +31,6 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
 
         try {
             $this->connection = DriverManager::getConnection($params);
-            $this->connection->connect();
         } catch (\Throwable) {
             self::markTestSkipped('Database unavailable — skipping DB integration tests.');
         }
@@ -42,6 +41,46 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Restore the schema if a test dropped the table (e.g. testWriterThrowsPersistenceExceptionOnDbFailure)
+        $tables = $this->connection->createSchemaManager()->listTableNames();
+        if (!in_array('flattened_products', $tables, true)) {
+            $this->connection->executeStatement(<<<'SQL'
+                CREATE TABLE flattened_products (
+                    id                          bigserial       PRIMARY KEY,
+                    sku                         varchar(64)     NOT NULL,
+                    name                        varchar(255)    NOT NULL,
+                    origin_country              varchar(128)    NOT NULL,
+                    origin_region               varchar(128)    NOT NULL,
+                    origin_farm                 varchar(128)    NOT NULL,
+                    origin_altitude_m           int             NULL,
+                    origin_process              varchar(64)     NOT NULL,
+                    origin_coordinates_lat      numeric(9,6)    NULL,
+                    origin_coordinates_lng      numeric(9,6)    NULL,
+                    roast_level                 varchar(32)     NOT NULL,
+                    roast_roasted_on            date            NOT NULL,
+                    roast_roaster               varchar(128)    NOT NULL,
+                    flavor_notes                text            NOT NULL DEFAULT '',
+                    tags                        text            NOT NULL DEFAULT '',
+                    tasting_score_acidity       smallint        NOT NULL,
+                    tasting_score_body          smallint        NOT NULL,
+                    tasting_score_sweetness     smallint        NOT NULL,
+                    tasting_score_aroma         smallint        NOT NULL,
+                    tasting_score_bitterness    smallint        NOT NULL,
+                    in_stock                    boolean         NOT NULL,
+                    description                 text            NULL,
+                    variant_sku                 varchar(128)    NOT NULL,
+                    variant_size                varchar(16)     NOT NULL,
+                    variant_grind               varchar(32)     NOT NULL,
+                    variant_price_eur           numeric(10,2)   NOT NULL,
+                    variant_stock               int             NOT NULL,
+                    variant_index               smallint        NOT NULL
+                )
+            SQL);
+            $this->connection->executeStatement(
+                'ALTER TABLE flattened_products ADD CONSTRAINT uq_flattened_products_sku_variant UNIQUE (sku, variant_sku)',
+            );
+        }
+
         $this->connection?->close();
     }
 
@@ -90,7 +129,80 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
         $this->writer->write([$this->makeRow('BEAN-0001', 'V1', 0)]);
     }
 
-    private function makeRow(string $sku, string $variantSku, int $index): FlattenedProductRow
+    public function testWritingSameRowTwiceProducesSingleRow(): void
+    {
+        $this->writer->write([$this->makeRow('BEAN-0001', 'V1', 0, variantStock: 10)]);
+        $this->writer->write([$this->makeRow('BEAN-0001', 'V1', 0, variantStock: 99)]);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('1', (string) $count);
+
+        $stock = $this->connection->fetchOne(
+            'SELECT variant_stock FROM flattened_products WHERE sku = :sku AND variant_sku = :variant_sku',
+            ['sku' => 'BEAN-0001', 'variant_sku' => 'V1'],
+        );
+        self::assertSame('99', (string) $stock);
+    }
+
+    public function testWritingMixOfNewAndExistingRowsUpsertsCorrectly(): void
+    {
+        $this->writer->write([
+            $this->makeRow('BEAN-0001', 'V1', 0, variantStock: 10),
+            $this->makeRow('BEAN-0002', 'V1', 0, variantStock: 20),
+        ]);
+
+        $this->writer->write([
+            $this->makeRow('BEAN-0001', 'V1', 0, variantStock: 55),
+            $this->makeRow('BEAN-0003', 'V1', 0, variantStock: 30),
+        ]);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('3', (string) $count);
+
+        $bean0001Stock = $this->connection->fetchOne(
+            'SELECT variant_stock FROM flattened_products WHERE sku = :sku AND variant_sku = :variant_sku',
+            ['sku' => 'BEAN-0001', 'variant_sku' => 'V1'],
+        );
+        self::assertSame('55', (string) $bean0001Stock);
+
+        $bean0002Stock = $this->connection->fetchOne(
+            'SELECT variant_stock FROM flattened_products WHERE sku = :sku AND variant_sku = :variant_sku',
+            ['sku' => 'BEAN-0002', 'variant_sku' => 'V1'],
+        );
+        self::assertSame('20', (string) $bean0002Stock);
+    }
+
+    public function testDifferentSkusWithSameVariantSkuAreTreatedAsDistinct(): void
+    {
+        $this->writer->write([
+            $this->makeRow('BEAN-0001', 'V1', 0),
+            $this->makeRow('BEAN-0002', 'V1', 0),
+        ]);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('2', (string) $count);
+    }
+
+    public function testUpsertWithinSingleChunkBatch(): void
+    {
+        $rows = [
+            $this->makeRow('BEAN-0001', 'V1', 0, variantStock: 10),
+            $this->makeRow('BEAN-0001', 'V1', 0, variantStock: 77),
+        ];
+
+        $this->writer->write($rows);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('1', (string) $count);
+
+        $stock = $this->connection->fetchOne(
+            'SELECT variant_stock FROM flattened_products WHERE sku = :sku AND variant_sku = :variant_sku',
+            ['sku' => 'BEAN-0001', 'variant_sku' => 'V1'],
+        );
+        self::assertSame('77', (string) $stock);
+    }
+
+    private function makeRow(string $sku, string $variantSku, int $index, int $variantStock = 10): FlattenedProductRow
     {
         return new FlattenedProductRow([
             'sku' => $sku,
@@ -116,7 +228,7 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
             'variant_size' => '250g',
             'variant_grind' => 'espresso',
             'variant_price_eur' => 12.50,
-            'variant_stock' => 10,
+            'variant_stock' => $variantStock,
             'variant_index' => $index,
         ], 1);
     }

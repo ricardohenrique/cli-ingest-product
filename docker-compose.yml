@@ -7,6 +7,8 @@ services:
             APP_ENV: prod
             DATABASE_URL: postgresql://app:app@postgres:5432/app?serverVersion=16&charset=utf8
         volumes:
+            - .:/app
+            - /app/vendor
             - ./docs:/data:ro
         depends_on:
             postgres:

@@ -48,10 +48,12 @@ final class Version20260528000001 extends AbstractMigration
                 variant_index               smallint        NOT NULL
             )
         SQL);
+        $this->addSql('ALTER TABLE flattened_products ADD CONSTRAINT uq_flattened_products_sku_variant UNIQUE (sku, variant_sku)');
     }
 
     public function down(Schema $schema): void
     {
+        $this->addSql('ALTER TABLE flattened_products DROP CONSTRAINT uq_flattened_products_sku_variant');
         $this->addSql('DROP TABLE flattened_products');
     }
 }
