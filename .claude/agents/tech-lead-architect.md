@@ -1,12 +1,6 @@
 ---
 name: tech-lead-architect
-description: "Use this agent when:
-(1) starting a feature that needs architectural design;
-(2) evaluating technology choices or patterns;
-(3) breaking down work for delegation to coder-executor;
-(4) making significant changes to existing layers.
-
-Do NOT use for tactical coding questions, routine implementation, or code review — those have their own agents."
+description: "Use this agent when starting a feature that needs architectural design, evaluating technology choices, breaking down work for delegation to coder-executor, or making significant changes to existing layers. Do NOT use for tactical coding questions, routine implementation, or code review."
 tools: Glob, Grep, Read, WebFetch, WebSearch
 model: opus
 color: purple

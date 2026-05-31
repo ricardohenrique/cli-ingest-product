@@ -11,7 +11,6 @@ into tabular rows, and writing to a destination. PHP 8.4 + Symfony 8 + PostgreSQ
 
 ## Build & run
 docker compose run --rm php bin/console feed:ingest /data/products.jsonl
-docker compose run --rm php bin/console feed:ingest /data/products.jsonl --output=csv
 
 ## Tests
 docker compose run --rm php bin/phpunit

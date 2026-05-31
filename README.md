@@ -13,20 +13,11 @@ A CLI pipeline that reads a nested JSONL product feed, flattens it into tabular 
 git clone <repo-url>
 cd cli-ingest-product
 
-# 2. Build the app image
-docker compose build app
-
-# 3. Bring up the stack — migrations run automatically on first start
+# 1. Bring up the stack — migrations run automatically on first start
 docker compose up -d
 
-# 4. Run the ingestion (the docs/ folder is mounted at /data inside the container)
+# 2. Run the ingestion (the docs/ folder is mounted at /data inside the container)
 docker compose exec app bin/console feed:ingest data/coffee_feed.jsonl
-
-# 5. Or write to CSV instead of PostgreSQL
-docker compose exec app bin/console feed:ingest data/coffee_feed.jsonl --output=csv
-
-# 6. Or use the env variable instead of the argument
-docker compose exec app -e FEED_INPUT_PATH=data/coffee_feed.jsonl app bin/console feed:ingest
 ```
 
 On success the command prints a summary table:
@@ -35,7 +26,7 @@ On success the command prints a summary table:
  ----------- --------- --------
   Processed   Skipped   Errors
  ----------- --------- --------
-  1 247        0         0
+  1 341        0         0
  ----------- --------- --------
 ```
 

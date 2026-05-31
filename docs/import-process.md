@@ -168,7 +168,7 @@ Once the generator is exhausted and the writer returns, the handler returns `Ing
  ----------- --------- --------
   Processed   Skipped   Errors
  ----------- --------- --------
-  1 247        0         0
+  1 341        0         0
  ----------- --------- --------
 ```
 
