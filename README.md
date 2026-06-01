@@ -137,3 +137,4 @@ This project was built with Claude Code (Anthropic) as a hands-on collaborator. 
 - Write the test suite and catch a field-naming mismatch (`sku_variant` → `variant_sku` normalization) during the red-green cycle.
 
 All design decisions, architectural choices, and acceptance criteria were directed by the developer. The AI wrote code; the developer drove what and why.
+More detailed tech notes can be found here: [import-process.md](docs/import-process.md)
