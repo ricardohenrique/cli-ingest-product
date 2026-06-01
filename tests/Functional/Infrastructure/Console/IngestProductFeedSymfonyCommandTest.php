@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Tests\Functional\UI\Console;
+namespace App\Tests\Functional\Infrastructure\Console;
 
 use App\Tests\Stub\InMemoryFeedReader;
 use App\Tests\Stub\InMemoryRowWriter;
@@ -11,7 +11,7 @@ use App\Domain\Port\Driven\FeedReaderPort;
 use App\Domain\Port\Driven\RowWriterPort;
 use App\Domain\ProductFeed\ProductFlattener;
 use App\Domain\ProductFeed\ProductRowValidator;
-use App\UI\Console\IngestProductFeedSymfonyCommand;
+use App\Infrastructure\Console\IngestProductFeedSymfonyCommand;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -31,7 +31,7 @@ final class IngestProductFeedSymfonyCommandTest extends TestCase
         $exitCode = $tester->execute(['path' => $this->fixturePath]);
 
         self::assertSame(0, $exitCode);
-        self::assertStringContainsString('Processed', $tester->getDisplay());
+        self::assertStringContainsString('Records processed', $tester->getDisplay());
         self::assertStringContainsString('3', $tester->getDisplay());
     }
 

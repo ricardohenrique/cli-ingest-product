@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\UI\Console;
+namespace App\Infrastructure\Console;
 
 use App\Application\IngestProductFeed\IngestProductFeedHandler;
 use App\Application\IngestProductFeed\IngestProductFeedInput;
@@ -53,13 +53,13 @@ final class IngestProductFeedSymfonyCommand extends Command
         }
 
         $io->table(
-            ['Processed', 'Skipped', 'Errors'],
-            [[$result->getProcessedCount(), $result->getSkippedCount(), count($result->getErrors())]],
+            ['Records processed', 'Rows written', 'Records skipped', 'Errors'],
+            [[$result->recordsProcessed, $result->rowsWritten, $result->recordsSkipped, count($result->errors)]],
         );
 
-        if (!empty($result->getErrors())) {
+        if (!empty($result->errors)) {
             $io->section('Skipped records');
-            foreach ($result->getErrors() as $error) {
+            foreach ($result->errors as $error) {
                 $io->text('  '.$error);
             }
         }

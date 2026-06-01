@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\ProductFeed;
 
+use App\Domain\ProductFeed\Exception\FlatteningException;
+
 final class ProductFlattener
 {
     /**
@@ -20,7 +22,9 @@ final class ProductFlattener
         $productData = $this->flattenValue($data, '');
 
         if (empty($variants)) {
-            return [];
+            throw new FlatteningException(
+                sprintf('Product "%s" has no variants', $data['sku'] ?? '<unknown>')
+            );
         }
 
         $rows = [];

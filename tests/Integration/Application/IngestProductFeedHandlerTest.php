@@ -40,9 +40,10 @@ final class IngestProductFeedHandlerTest extends TestCase
 
         $result = $this->handler->handle(new IngestProductFeedInput('/fake/path.jsonl'));
 
-        // 2 + 1 + 3 = 6 rows written
-        self::assertSame(6, $result->getProcessedCount());
-        self::assertSame(0, $result->getSkippedCount());
+        // 3 records processed, 2 + 1 + 3 = 6 rows written
+        self::assertSame(3, $result->recordsProcessed);
+        self::assertSame(6, $result->rowsWritten);
+        self::assertSame(0, $result->recordsSkipped);
         self::assertSame(6, $this->writer->countWrittenRows());
     }
 
@@ -54,10 +55,11 @@ final class IngestProductFeedHandlerTest extends TestCase
 
         $result = $this->handler->handle(new IngestProductFeedInput('/fake/path.jsonl'));
 
-        self::assertSame(2, $result->getProcessedCount());
-        self::assertSame(1, $result->getSkippedCount());
-        self::assertCount(1, $result->getErrors());
-        self::assertStringContainsString('line 2', $result->getErrors()[0]);
+        self::assertSame(2, $result->recordsProcessed);
+        self::assertSame(2, $result->rowsWritten);
+        self::assertSame(1, $result->recordsSkipped);
+        self::assertCount(1, $result->errors);
+        self::assertStringContainsString('line 2', $result->errors[0]);
         self::assertSame(2, $this->writer->countWrittenRows());
     }
 
@@ -73,8 +75,9 @@ final class IngestProductFeedHandlerTest extends TestCase
 
         $result = $this->handler->handle(new IngestProductFeedInput('/fake/path.jsonl'));
 
-        self::assertSame(2, $result->getProcessedCount());
-        self::assertSame(1, $result->getSkippedCount());
+        self::assertSame(2, $result->recordsProcessed);
+        self::assertSame(2, $result->rowsWritten);
+        self::assertSame(1, $result->recordsSkipped);
         self::assertSame(2, $this->writer->countWrittenRows());
     }
 
@@ -82,10 +85,24 @@ final class IngestProductFeedHandlerTest extends TestCase
     {
         $result = $this->handler->handle(new IngestProductFeedInput('/fake/path.jsonl'));
 
-        self::assertSame(0, $result->getProcessedCount());
-        self::assertSame(0, $result->getSkippedCount());
+        self::assertSame(0, $result->recordsProcessed);
+        self::assertSame(0, $result->rowsWritten);
+        self::assertSame(0, $result->recordsSkipped);
         self::assertSame(0, $this->writer->countWrittenRows());
-        self::assertEmpty($result->getErrors());
+        self::assertEmpty($result->errors);
+    }
+
+    public function testProductWithNoVariantsIsCountedAsSkipped(): void
+    {
+        $this->reader->addSuccess(['sku' => 'BEAN-NO-VARIANTS', 'name' => 'Test', 'variants' => []], 1);
+
+        $result = $this->handler->handle(new IngestProductFeedInput('/fake/path.jsonl'));
+
+        self::assertSame(1, $result->recordsSkipped);
+        self::assertSame(0, $result->recordsProcessed);
+        self::assertSame(0, $result->rowsWritten);
+        self::assertCount(1, $result->errors);
+        self::assertSame(0, $this->writer->countWrittenRows());
     }
 
     private function makeProduct(string $sku, int $variantCount): array

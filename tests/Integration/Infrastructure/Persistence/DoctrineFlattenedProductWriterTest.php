@@ -202,6 +202,38 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
         self::assertSame('77', (string) $stock);
     }
 
+    public function testMixedShapeChunkWritesAllRows(): void
+    {
+        // 3 full-shape rows + 2 rows missing optional coordinate columns = 5 total
+        $rows = [
+            $this->makeRow('BEAN-0001', 'V1', 0),
+            $this->makeRow('BEAN-0002', 'V1', 0),
+            $this->makeRow('BEAN-0003', 'V1', 0),
+            $this->makeRowWithoutCoordinates('BEAN-0004', 'V1', 0),
+            $this->makeRowWithoutCoordinates('BEAN-0005', 'V1', 0),
+        ];
+
+        $this->writer->write($rows);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('5', (string) $count);
+    }
+
+    public function testBatchUpsertUpdatesOnConflict(): void
+    {
+        $this->writer->write([$this->makeRow('BEAN-0001', 'V1', 0, variantStock: 10)]);
+        $this->writer->write([$this->makeRow('BEAN-0001', 'V1', 0, variantStock: 42)]);
+
+        $count = $this->connection->fetchOne('SELECT COUNT(*) FROM flattened_products');
+        self::assertSame('1', (string) $count);
+
+        $stock = $this->connection->fetchOne(
+            'SELECT variant_stock FROM flattened_products WHERE sku = :sku AND variant_sku = :variant_sku',
+            ['sku' => 'BEAN-0001', 'variant_sku' => 'V1'],
+        );
+        self::assertSame('42', (string) $stock);
+    }
+
     private function makeRow(string $sku, string $variantSku, int $index, int $variantStock = 10): FlattenedProductRow
     {
         return new FlattenedProductRow([
@@ -212,6 +244,40 @@ final class DoctrineFlattenedProductWriterTest extends TestCase
             'origin_farm' => 'Test Farm',
             'origin_altitude_m' => 1600,
             'origin_process' => 'washed',
+            'origin_coordinates_lat' => 9.145,
+            'origin_coordinates_lng' => 40.489,
+            'roast_level' => 'medium',
+            'roast_roasted_on' => '2026-01-01',
+            'roast_roaster' => 'Test Roastery',
+            'flavor_notes' => 'chocolate,caramel',
+            'tags' => 'organic',
+            'tasting_score_acidity' => 5,
+            'tasting_score_body' => 7,
+            'tasting_score_sweetness' => 6,
+            'tasting_score_aroma' => 8,
+            'tasting_score_bitterness' => 4,
+            'in_stock' => true,
+            'description' => null,
+            'variant_sku' => $variantSku,
+            'variant_size' => '250g',
+            'variant_grind' => 'espresso',
+            'variant_price_eur' => 12.50,
+            'variant_stock' => $variantStock,
+            'variant_index' => $index,
+        ], 1);
+    }
+
+    private function makeRowWithoutCoordinates(string $sku, string $variantSku, int $index, int $variantStock = 10): FlattenedProductRow
+    {
+        return new FlattenedProductRow([
+            'sku' => $sku,
+            'name' => 'Test Bean '.$sku,
+            'origin_country' => 'Ethiopia',
+            'origin_region' => 'Sidamo',
+            'origin_farm' => 'Test Farm',
+            'origin_altitude_m' => 1600,
+            'origin_process' => 'washed',
+            // origin_coordinates_lat and origin_coordinates_lng intentionally omitted
             'roast_level' => 'medium',
             'roast_roasted_on' => '2026-01-01',
             'roast_roaster' => 'Test Roastery',

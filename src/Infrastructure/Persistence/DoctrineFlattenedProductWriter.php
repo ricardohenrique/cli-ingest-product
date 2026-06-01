@@ -81,14 +81,16 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
         $this->connection->beginTransaction();
 
         try {
-            foreach ($rows as $row) {
-                [$data, $types] = $this->mapToColumns($row);
-                $this->connection->executeStatement(
-                    $this->buildUpsertSql(array_keys($data)),
-                    $data,
-                    $types,
-                );
+            // Group rows by their column-signature so each batch statement
+            // has an identical column list (rows may omit optional columns).
+            $groups = $this->groupByColumnSignature($rows);
+
+            foreach ($groups as $group) {
+                [$columns, $flatValues, $flatTypes] = $this->buildBatchParams($group);
+                $sql = $this->buildBatchUpsertSql($columns, count($group));
+                $this->connection->executeStatement($sql, $flatValues, $flatTypes);
             }
+
             $this->connection->commit();
         } catch (\Throwable $e) {
             $this->connection->rollBack();
@@ -98,6 +100,67 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
                 $e,
             );
         }
+    }
+
+    /**
+     * Groups rows by the sorted list of column keys present in each row.
+     * Within each group, rows are de-duplicated by (sku, variant_sku) keeping
+     * the last occurrence so the batch INSERT does not violate the unique
+     * constraint when the same key appears twice in a single chunk.
+     *
+     * @param  FlattenedProductRow[] $rows
+     * @return array<string, FlattenedProductRow[]>
+     */
+    private function groupByColumnSignature(array $rows): array
+    {
+        $groups = [];
+
+        foreach ($rows as $row) {
+            [$data] = $this->mapToColumns($row);
+            $signature = implode(',', array_keys($data));
+
+            // De-duplicate within group by conflict-key so a single batch
+            // INSERT does not attempt to update the same row twice.
+            $conflictKey = ($data['sku'] ?? '')."\x00".($data['variant_sku'] ?? '');
+            $groups[$signature][$conflictKey] = $row;
+        }
+
+        // Strip the inner conflict-key index before returning
+        return array_map('array_values', $groups);
+    }
+
+    /**
+     * Builds the flat values and types arrays for a batch of same-shape rows.
+     * Only columns with explicit DBAL types appear in $flatTypes; DBAL defaults
+     * untyped positional parameters to ParameterType::STRING automatically.
+     *
+     * @param  FlattenedProductRow[] $rows
+     * @return array{0: list<string>, 1: list<mixed>, 2: array<int, string>}
+     */
+    private function buildBatchParams(array $rows): array
+    {
+        $flatValues = [];
+        $flatTypes = [];
+        $columns = null;
+        $positionalIndex = 0;
+
+        foreach ($rows as $row) {
+            [$data, $types] = $this->mapToColumns($row);
+
+            if ($columns === null) {
+                $columns = array_keys($data);
+            }
+
+            foreach ($data as $column => $value) {
+                $flatValues[] = $value;
+                if (isset($types[$column])) {
+                    $flatTypes[$positionalIndex] = $types[$column];
+                }
+                ++$positionalIndex;
+            }
+        }
+
+        return [$columns ?? [], $flatValues, $flatTypes];
     }
 
     /** @return array{0: array<string,mixed>, 1: array<string,string>} */
@@ -120,11 +183,17 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
         return [$data, $types];
     }
 
-    /** @param list<string> $columns */
-    private function buildUpsertSql(array $columns): string
+    /**
+     * Builds a multi-row upsert SQL statement using positional ? placeholders.
+     *
+     * @param list<string> $columns
+     */
+    private function buildBatchUpsertSql(array $columns, int $rowCount): string
     {
         $columnList = implode(', ', $columns);
-        $paramList  = implode(', ', array_map(static fn (string $c) => ':'.$c, $columns));
+
+        $singleRowPlaceholders = '('.implode(', ', array_fill(0, count($columns), '?')).')';
+        $allRowPlaceholders = implode(', ', array_fill(0, $rowCount, $singleRowPlaceholders));
 
         $updateColumns = array_filter(
             $columns,
@@ -137,10 +206,10 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
         );
 
         return sprintf(
-            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s',
+            'INSERT INTO %s (%s) VALUES %s ON CONFLICT (%s) DO UPDATE SET %s',
             self::TABLE,
             $columnList,
-            $paramList,
+            $allRowPlaceholders,
             implode(', ', self::KEY_COLUMNS),
             $setClauses,
         );

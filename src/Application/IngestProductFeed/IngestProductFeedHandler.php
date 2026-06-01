@@ -6,7 +6,7 @@ namespace App\Application\IngestProductFeed;
 
 use App\Domain\Port\Driven\FeedReaderPort;
 use App\Domain\Port\Driven\RowWriterPort;
-use App\Domain\ProductFeed\Exception\FlatteningException;
+use App\Domain\ProductFeed\Exception\ProductFeedException;
 use App\Domain\ProductFeed\ProductFlattener;
 use App\Domain\ProductFeed\ProductRowValidator;
 use Psr\Log\LoggerInterface;
@@ -24,15 +24,25 @@ final class IngestProductFeedHandler
 
     public function handle(IngestProductFeedInput $input): IngestProductFeedResult
     {
-        $result = new IngestProductFeedResult();
+        $recordsProcessed = 0;
+        $recordsSkipped = 0;
+        $rowsWritten = 0;
+        $errors = [];
 
-        $this->writer->write($this->generateRows($input, $result));
+        $this->writer->write(
+            $this->generateRows($input, $recordsProcessed, $recordsSkipped, $rowsWritten, $errors)
+        );
 
-        return $result;
+        return new IngestProductFeedResult($recordsProcessed, $recordsSkipped, $rowsWritten, $errors);
     }
 
-    private function generateRows(IngestProductFeedInput $input, IngestProductFeedResult $result): \Generator
-    {
+    private function generateRows(
+        IngestProductFeedInput $input,
+        int &$recordsProcessed,
+        int &$recordsSkipped,
+        int &$rowsWritten,
+        array &$errors,
+    ): \Generator {
         foreach ($this->reader->read($input->sourcePath) as $readResult) {
             if (!$readResult->isSuccess()) {
                 $this->logger->warning('Failed to read record', [
@@ -41,8 +51,8 @@ final class IngestProductFeedHandler
                     'error' => $readResult->getError(),
                     'excerpt' => $readResult->getRawExcerpt(),
                 ]);
-                $result->incrementSkipped();
-                $result->addError(sprintf('line %d: %s', $readResult->getLineNumber(), $readResult->getError()));
+                ++$recordsSkipped;
+                $errors[] = sprintf('line %d: %s', $readResult->getLineNumber(), $readResult->getError());
                 continue;
             }
 
@@ -53,17 +63,18 @@ final class IngestProductFeedHandler
 
                 foreach ($flattenedRows as $row) {
                     $this->validator->validate($row);
-                    $result->incrementProcessed();
+                    ++$rowsWritten;
                     yield $row;
                 }
-            } catch (FlatteningException $e) {
+                ++$recordsProcessed;
+            } catch (ProductFeedException $e) {
                 $this->logger->warning('Failed to process record', [
                     'line' => $item->getLineNumber(),
                     'source' => $input->sourcePath,
                     'error' => $e->getMessage(),
                 ]);
-                $result->incrementSkipped();
-                $result->addError(sprintf('line %d: %s', $item->getLineNumber(), $e->getMessage()));
+                ++$recordsSkipped;
+                $errors[] = sprintf('line %d: %s', $item->getLineNumber(), $e->getMessage());
             }
         }
     }

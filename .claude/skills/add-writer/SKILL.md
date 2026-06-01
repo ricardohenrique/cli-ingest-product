@@ -12,12 +12,12 @@ Follow these steps exactly:
     - Write all rows in a single transaction or batch where possible
 
 2. Register in `config/services.yaml`:
-```yaml
-   App\Infrastructure\Writer\<Name>RowWriter:
-       tags:
-           - { name: app.row_writer, format: <format-slug> }
-```
-
+    ```yaml
+       App\Infrastructure\Writer\<Name>RowWriter:
+           tags:
+               - { name: app.row_writer, format: <format-slug> }
+    ```
+   
 3. Add a unit test in `tests/Infrastructure/Writer/<Name>RowWriterTest.php`
     - Test happy path with 3+ rows
     - Test empty input (zero rows)

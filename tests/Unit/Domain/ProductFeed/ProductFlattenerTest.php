@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Domain\ProductFeed;
 
+use App\Domain\ProductFeed\Exception\FlatteningException;
 use App\Domain\ProductFeed\ProductFeedItem;
 use App\Domain\ProductFeed\ProductFlattener;
 use PHPUnit\Framework\TestCase;
@@ -199,7 +200,7 @@ final class ProductFlattenerTest extends TestCase
         self::assertSame('', $rows[0]->get('flavor_notes'));
     }
 
-    public function testZeroVariantsProducesNoRows(): void
+    public function testZeroVariantsThrowsFlatteningException(): void
     {
         $item = $this->makeItem([
             'sku' => 'BEAN-0001',
@@ -207,9 +208,9 @@ final class ProductFlattenerTest extends TestCase
             'variants' => [],
         ]);
 
-        $rows = $this->flattener->flatten($item);
+        $this->expectException(FlatteningException::class);
 
-        self::assertCount(0, $rows);
+        $this->flattener->flatten($item);
     }
 
     private function makeItem(array $data, int $line = 1): ProductFeedItem
