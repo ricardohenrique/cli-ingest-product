@@ -103,6 +103,12 @@ Three rules, applied by `ProductFlattener`:
 2. **`variants` array** → row expansion. Each variant becomes one output row; product-level fields are repeated. Position is recorded as `variant_index`. A product with zero variants is rejected with `FlatteningException`.
 3. **Scalar string arrays** (`flavor_notes`, `tags`) → comma-joined text. Not expanded.
 
+### No entity or repository pattern
+
+The persistence layer uses Doctrine DBAL directly rather than ORM entities and repositories. The Repository pattern exists to load domain objects from storage, mutate them, and save them back — none of which happens here. This is a write-only pipeline: the database is never queried, there is no identity tracking, and no unit-of-work flushing. `FlattenedProductRow` is not a domain entity; it has no lifecycle and no behaviour — it is the output of the flattening process, a bag of key-value pairs on its way to a table.
+
+Using DBAL directly also makes the chunked multi-row batch upsert possible. An ORM would issue one `INSERT` per entity by default; reproducing the grouped `INSERT … VALUES (…),(…),… ON CONFLICT DO UPDATE` strategy would require native queries, defeating the point. The domain's abstraction over persistence is `RowWriterPort` — that interface is the repository contract from the domain's perspective. The adapter behind it uses DBAL for performance.
+
 ### Exception hierarchy
 
 ```
