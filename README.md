@@ -118,11 +118,12 @@ Infrastructure adapters never let their own exceptions leak past the domain boun
 
 ## What I'd do with more time
 
+- **Async ingestion** — dispatch the ingestion as a Symfony Messenger message so the process runs in a background worker. The CLI command would enqueue the job and return immediately, decoupling feed submission from processing time and enabling retries and back-pressure out of the box.
+- **Import audit table** — introduce a dedicated `feed_imports` table that records each run: the source file, how it was triggered (CLI, scheduled job, API), started/finished timestamps, records processed, rows written, and any skipped-record errors. This gives operators a full history without having to parse logs.
 - **Domain events** — emit `ProductFeedIngested` and `ProductRowSkipped` events for external observability (metrics, alerting).
 - **Configurable output adapters** — a `SqliteFlattenedProductWriter` would be trivial to add; the port interface already isolates the choice.
 - **Schema introspection** — derive columns dynamically from the first batch of rows rather than hard-coding them, so the writer generalises beyond this specific feed.
-- **Parallel processing** — split the file into chunks and process each in a worker process via Symfony Messenger.
-- **Structured run log** — persist `IngestProductFeedResult` to a `feed_runs` table for audit history.
+- **Deeper review of AI-generated code and tests** — the implementation was driven under close direction, but with more time I'd do a thorough pass over every generated class and test case: verifying edge-case coverage, removing any over-abstraction, and ensuring the test suite genuinely exercises behaviour rather than just reflecting the implementation.
 
 ---
 
