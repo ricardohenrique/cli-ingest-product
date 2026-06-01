@@ -10,7 +10,7 @@ A CLI pipeline that reads a nested JSONL product feed, flattens it into tabular 
 
 ```bash
 # 1. Clone and enter the project
-git clone <repo-url>
+git clone https://github.com/ricardohenrique/cli-ingest-product.git
 cd cli-ingest-product
 
 # 2. Bring up the stack — migrations run automatically on first start

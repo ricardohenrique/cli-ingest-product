@@ -44,6 +44,11 @@ when@prod:
                 path: php://stderr
                 level: debug
                 formatter: monolog.formatter.json
+            feed_errors:
+                type: stream
+                path: php://stderr
+                level: warning
+                formatter: monolog.formatter.json
             console:
                 type: console
                 process_psr_3_messages: false

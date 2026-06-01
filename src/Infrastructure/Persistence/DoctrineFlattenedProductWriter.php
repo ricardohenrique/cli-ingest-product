@@ -94,6 +94,10 @@ final class DoctrineFlattenedProductWriter implements RowWriterPort
             $this->connection->commit();
         } catch (\Throwable $e) {
             $this->connection->rollBack();
+            $this->logger->error('Failed to write batch to database', [
+                'rows' => count($rows),
+                'error' => $e->getMessage(),
+            ]);
             throw new PersistenceException(
                 sprintf('Failed to write batch of %d rows: %s', count($rows), $e->getMessage()),
                 0,
