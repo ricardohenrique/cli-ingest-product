@@ -6,11 +6,18 @@ namespace App\Infrastructure\Console;
 
 use App\Application\IngestProductFeed\IngestProductFeedHandler;
 use App\Application\IngestProductFeed\IngestProductFeedInput;
+use App\Domain\Port\Driven\FeedReaderPort;
+use App\Domain\Port\Driven\RowWriterPort;
 use App\Domain\ProductFeed\Exception\ProductFeedException;
+use App\Domain\ProductFeed\ProductFlattener;
+use App\Domain\ProductFeed\ProductRowValidator;
+use App\Infrastructure\Output\CsvFileRowWriter;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -18,7 +25,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final class IngestProductFeedSymfonyCommand extends Command
 {
     public function __construct(
-        private readonly IngestProductFeedHandler $handler,
+        private readonly FeedReaderPort $reader,
+        private readonly ProductFlattener $flattener,
+        private readonly ProductRowValidator $validator,
+        private readonly LoggerInterface $logger,
+        private readonly RowWriterPort $doctrineWriter,
+        private readonly CsvFileRowWriter $csvWriter,
     ) {
         parent::__construct();
     }
@@ -29,6 +41,21 @@ final class IngestProductFeedSymfonyCommand extends Command
             'path',
             InputArgument::OPTIONAL,
             'Path to the JSONL feed file (or set FEED_INPUT_PATH env variable)',
+        );
+
+        $this->addOption(
+            'writer',
+            null,
+            InputOption::VALUE_REQUIRED,
+            'Output writer to use: postgres or csv',
+            'postgres',
+        );
+
+        $this->addOption(
+            'output-path',
+            null,
+            InputOption::VALUE_REQUIRED,
+            'Output file path for the CSV writer (overrides default; only used with --writer=csv)',
         );
     }
 
@@ -44,8 +71,33 @@ final class IngestProductFeedSymfonyCommand extends Command
             return Command::FAILURE;
         }
 
+        $writerName = $input->getOption('writer');
+        $outputPath = $input->getOption('output-path');
+
+        $writer = match ($writerName) {
+            'postgres' => $this->doctrineWriter,
+            'csv' => $outputPath
+                ? new CsvFileRowWriter($outputPath, $this->logger)
+                : $this->csvWriter,
+            default => null,
+        };
+
+        if ($writer === null) {
+            $io->error(sprintf('Unknown writer "%s". Supported: postgres, csv', $writerName));
+
+            return Command::FAILURE;
+        }
+
+        $handler = new IngestProductFeedHandler(
+            $this->reader,
+            $writer,
+            $this->flattener,
+            $this->validator,
+            $this->logger,
+        );
+
         try {
-            $result = $this->handler->handle(new IngestProductFeedInput($path));
+            $result = $handler->handle(new IngestProductFeedInput($path));
         } catch (ProductFeedException $e) {
             $io->error($e->getMessage());
 

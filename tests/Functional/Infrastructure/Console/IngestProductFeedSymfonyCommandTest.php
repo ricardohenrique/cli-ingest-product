@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional\Infrastructure\Console;
 
-use App\Tests\Stub\InMemoryFeedReader;
-use App\Tests\Stub\InMemoryRowWriter;
-use App\Application\IngestProductFeed\IngestProductFeedHandler;
-use App\Domain\Port\Driven\FeedReaderPort;
-use App\Domain\Port\Driven\RowWriterPort;
 use App\Domain\ProductFeed\ProductFlattener;
 use App\Domain\ProductFeed\ProductRowValidator;
 use App\Infrastructure\Console\IngestProductFeedSymfonyCommand;
+use App\Infrastructure\Input\JsonlProductFeedReader;
+use App\Infrastructure\Output\CsvFileRowWriter;
+use App\Tests\Stub\InMemoryRowWriter;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -52,18 +50,56 @@ final class IngestProductFeedSymfonyCommandTest extends TestCase
         self::assertSame(1, $exitCode);
     }
 
+    public function testWriterCsvWithOutputPathExitsZeroAndWritesFile(): void
+    {
+        $tempFile = tempnam(sys_get_temp_dir(), 'feed_csv_test_');
+        self::assertNotFalse($tempFile);
+
+        try {
+            $tester = $this->buildTester();
+            $exitCode = $tester->execute([
+                'path' => $this->fixturePath,
+                '--writer' => 'csv',
+                '--output-path' => $tempFile,
+            ]);
+
+            self::assertSame(0, $exitCode);
+            self::assertStringContainsString('Records processed', $tester->getDisplay());
+            self::assertGreaterThan(0, filesize($tempFile), 'CSV output file should not be empty');
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
+    }
+
+    public function testUnknownWriterExitsOne(): void
+    {
+        $tester = $this->buildTester();
+        $exitCode = $tester->execute([
+            'path' => $this->fixturePath,
+            '--writer' => 'bogus',
+        ]);
+
+        self::assertSame(1, $exitCode);
+        self::assertStringContainsString('bogus', $tester->getDisplay());
+        self::assertStringContainsString('Supported: postgres, csv', $tester->getDisplay());
+    }
+
     private function buildTester(): CommandTester
     {
-        $writer = new InMemoryRowWriter();
-        $handler = new IngestProductFeedHandler(
-            new \App\Infrastructure\Input\JsonlProductFeedReader(),
-            $writer,
+        $doctrineWriter = new InMemoryRowWriter();
+        $defaultCsvPath = sys_get_temp_dir().'/feed_test_default_output.csv';
+        $csvWriter = new CsvFileRowWriter($defaultCsvPath, new NullLogger());
+
+        $command = new IngestProductFeedSymfonyCommand(
+            new JsonlProductFeedReader(),
             new ProductFlattener(),
             new ProductRowValidator(),
             new NullLogger(),
+            $doctrineWriter,
+            $csvWriter,
         );
-
-        $command = new IngestProductFeedSymfonyCommand($handler);
 
         return new CommandTester($command);
     }

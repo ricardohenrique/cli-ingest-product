@@ -7,6 +7,7 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    app.csv_writer.output_path: '%kernel.project_dir%/data/output.csv'
 
 services:
     # default configuration for services in *this* file
@@ -25,3 +26,12 @@ services:
 
     App\Domain\Port\Driven\RowWriterPort:
         class: App\Infrastructure\Persistence\DoctrineFlattenedProductWriter
+
+    App\Infrastructure\Output\CsvFileRowWriter:
+        arguments:
+            $outputPath: '%app.csv_writer.output_path%'
+            $logger: '@monolog.logger.feed'
+
+    App\Infrastructure\Console\IngestProductFeedSymfonyCommand:
+        arguments:
+            $logger: '@monolog.logger.feed'
