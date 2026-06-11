@@ -30,7 +30,7 @@ final class IngestProductFeedSymfonyCommand extends Command
         private readonly ProductRowValidator $validator,
         private readonly LoggerInterface $logger,
         private readonly RowWriterPort $doctrineWriter,
-        private readonly CsvFileRowWriter $csvWriter,
+        private readonly string $defaultCsvOutputPath,
     ) {
         parent::__construct();
     }
@@ -57,6 +57,13 @@ final class IngestProductFeedSymfonyCommand extends Command
             InputOption::VALUE_REQUIRED,
             'Output file path for the CSV writer (overrides default; only used with --writer=csv)',
         );
+
+        $this->addOption(
+            'field-map',
+            null,
+            InputOption::VALUE_REQUIRED,
+            'Rename CSV header columns: original:renamed,... (only with --writer=csv)',
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -74,11 +81,36 @@ final class IngestProductFeedSymfonyCommand extends Command
         $writerName = $input->getOption('writer');
         $outputPath = $input->getOption('output-path');
 
+        $fieldMap = [];
+        $rawMap = $input->getOption('field-map');
+
+        if ($rawMap !== null) {
+            if ($writerName !== 'csv') {
+                $io->error('--field-map is only supported with --writer=csv');
+
+                return Command::FAILURE;
+            }
+
+            foreach (explode(',', $rawMap) as $pair) {
+                $parts = explode(':', $pair, 2);
+
+                if (count($parts) !== 2 || trim($parts[0]) === '' || trim($parts[1]) === '') {
+                    $io->error(sprintf('Invalid --field-map pair "%s". Expected format: original:renamed', $pair));
+
+                    return Command::FAILURE;
+                }
+
+                $fieldMap[trim($parts[0])] = trim($parts[1]);
+            }
+        }
+
         $writer = match ($writerName) {
             'postgres' => $this->doctrineWriter,
-            'csv' => $outputPath
-                ? new CsvFileRowWriter($outputPath, $this->logger)
-                : $this->csvWriter,
+            'csv' => new CsvFileRowWriter(
+                $outputPath ?? $this->defaultCsvOutputPath,
+                $this->logger,
+                $fieldMap,
+            ),
             default => null,
         };
 

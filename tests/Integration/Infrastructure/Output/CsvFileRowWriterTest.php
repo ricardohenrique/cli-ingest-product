@@ -84,6 +84,64 @@ final class CsvFileRowWriterTest extends TestCase
         self::assertSame(['last', 'first', 'middle'], $lines[1]);
     }
 
+    public function testFieldMapRenamesHeaderKeysButLeavesValuesUnchanged(): void
+    {
+        $fieldMap = ['sku' => 'product-id', 'name' => 'product-title'];
+        $writer = new CsvFileRowWriter($this->tempFile, new NullLogger(), $fieldMap);
+
+        $writer->write([
+            $this->makeRow(['sku' => 'BEAN-001', 'name' => 'Alpha', 'price' => '10.00'], 1),
+        ]);
+
+        $lines = $this->readCsvLines($this->tempFile);
+
+        self::assertCount(2, $lines);
+        self::assertSame(['product-id', 'product-title', 'price'], $lines[0], 'Mapped keys should appear in header');
+        self::assertSame(['BEAN-001', 'Alpha', '10.00'], $lines[1], 'Data values should be unchanged');
+    }
+
+    public function testPartialFieldMapKeepsUnmappedKeysWithOriginalName(): void
+    {
+        $fieldMap = ['sku' => 'product-id'];
+        $writer = new CsvFileRowWriter($this->tempFile, new NullLogger(), $fieldMap);
+
+        $writer->write([
+            $this->makeRow(['sku' => 'BEAN-001', 'name' => 'Alpha', 'price' => '10.00'], 1),
+        ]);
+
+        $lines = $this->readCsvLines($this->tempFile);
+
+        self::assertCount(2, $lines);
+        self::assertSame(['product-id', 'name', 'price'], $lines[0], 'Only mapped key should be renamed');
+        self::assertSame(['BEAN-001', 'Alpha', '10.00'], $lines[1]);
+    }
+
+    public function testEmptyFieldMapProducesSameOutputAsNoMap(): void
+    {
+        $writerNoMap = new CsvFileRowWriter($this->tempFile, new NullLogger());
+        $writerNoMap->write([
+            $this->makeRow(['sku' => 'BEAN-001', 'name' => 'Alpha'], 1),
+        ]);
+        $linesNoMap = $this->readCsvLines($this->tempFile);
+
+        $tempFileWithMap = tempnam(sys_get_temp_dir(), 'csv_writer_empty_map_');
+        self::assertNotFalse($tempFileWithMap);
+
+        try {
+            $writerEmptyMap = new CsvFileRowWriter($tempFileWithMap, new NullLogger(), []);
+            $writerEmptyMap->write([
+                $this->makeRow(['sku' => 'BEAN-001', 'name' => 'Alpha'], 1),
+            ]);
+            $linesEmptyMap = $this->readCsvLines($tempFileWithMap);
+
+            self::assertSame($linesNoMap, $linesEmptyMap, 'Empty map must produce identical output to no map');
+        } finally {
+            if (file_exists($tempFileWithMap)) {
+                unlink($tempFileWithMap);
+            }
+        }
+    }
+
     private function makeRow(array $data, int $lineNumber): FlattenedProductRow
     {
         return new FlattenedProductRow($data, $lineNumber);

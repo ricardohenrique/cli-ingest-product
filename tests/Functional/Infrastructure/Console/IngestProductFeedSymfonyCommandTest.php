@@ -8,7 +8,6 @@ use App\Domain\ProductFeed\ProductFlattener;
 use App\Domain\ProductFeed\ProductRowValidator;
 use App\Infrastructure\Console\IngestProductFeedSymfonyCommand;
 use App\Infrastructure\Input\JsonlProductFeedReader;
-use App\Infrastructure\Output\CsvFileRowWriter;
 use App\Tests\Stub\InMemoryRowWriter;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -86,11 +85,71 @@ final class IngestProductFeedSymfonyCommandTest extends TestCase
         self::assertStringContainsString('Supported: postgres, csv', $tester->getDisplay());
     }
 
+    public function testFieldMapWithCsvWriterRenamesHeaderColumn(): void
+    {
+        $tempFile = tempnam(sys_get_temp_dir(), 'feed_csv_fieldmap_');
+        self::assertNotFalse($tempFile);
+
+        try {
+            $tester = $this->buildTester();
+            $exitCode = $tester->execute([
+                'path' => $this->fixturePath,
+                '--writer' => 'csv',
+                '--output-path' => $tempFile,
+                '--field-map' => 'sku:product-id',
+            ]);
+
+            self::assertSame(0, $exitCode);
+
+            $handle = fopen($tempFile, 'r');
+            self::assertNotFalse($handle);
+
+            try {
+                $headerRow = fgetcsv($handle, escape: '\\');
+            } finally {
+                fclose($handle);
+            }
+
+            self::assertIsArray($headerRow);
+            self::assertContains('product-id', $headerRow, 'Renamed header "product-id" must appear in CSV');
+            self::assertNotContains('sku', $headerRow, 'Original key "sku" must not appear in CSV header when remapped');
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
+    }
+
+    public function testFieldMapWithoutCsvWriterExitsOne(): void
+    {
+        $tester = $this->buildTester();
+        $exitCode = $tester->execute([
+            'path' => $this->fixturePath,
+            '--writer' => 'postgres',
+            '--field-map' => 'sku:product-id',
+        ]);
+
+        self::assertSame(1, $exitCode);
+        self::assertStringContainsString('--field-map is only supported with --writer=csv', $tester->getDisplay());
+    }
+
+    public function testMalformedFieldMapPairExitsOne(): void
+    {
+        $tester = $this->buildTester();
+        $exitCode = $tester->execute([
+            'path' => $this->fixturePath,
+            '--writer' => 'csv',
+            '--field-map' => 'badformat',
+        ]);
+
+        self::assertSame(1, $exitCode);
+        self::assertStringContainsString('Invalid --field-map pair', $tester->getDisplay());
+    }
+
     private function buildTester(): CommandTester
     {
         $doctrineWriter = new InMemoryRowWriter();
-        $defaultCsvPath = sys_get_temp_dir().'/feed_test_default_output.csv';
-        $csvWriter = new CsvFileRowWriter($defaultCsvPath, new NullLogger());
+        $defaultCsvOutputPath = sys_get_temp_dir().'/feed_test_default_output.csv';
 
         $command = new IngestProductFeedSymfonyCommand(
             new JsonlProductFeedReader(),
@@ -98,7 +157,7 @@ final class IngestProductFeedSymfonyCommandTest extends TestCase
             new ProductRowValidator(),
             new NullLogger(),
             $doctrineWriter,
-            $csvWriter,
+            $defaultCsvOutputPath,
         );
 
         return new CommandTester($command);

@@ -35,3 +35,4 @@ services:
     App\Infrastructure\Console\IngestProductFeedSymfonyCommand:
         arguments:
             $logger: '@monolog.logger.feed'
+            $defaultCsvOutputPath: '%app.csv_writer.output_path%'

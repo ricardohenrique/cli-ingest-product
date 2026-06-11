@@ -11,9 +11,11 @@ use Psr\Log\LoggerInterface;
 
 final class CsvFileRowWriter implements RowWriterPort
 {
+    /** @param array<string, string> $fieldMap */
     public function __construct(
         private readonly string $outputPath,
         private readonly LoggerInterface $logger,
+        private readonly array $fieldMap = [],
     ) {
     }
 
@@ -35,7 +37,9 @@ final class CsvFileRowWriter implements RowWriterPort
                 $data = $row->getData();
 
                 if (!$headerWritten) {
-                    fputcsv($handle, array_keys($data), escape: '\\');
+                    $keys = array_keys($data);
+                    $headers = array_map(fn(string $k) => $this->fieldMap[$k] ?? $k, $keys);
+                    fputcsv($handle, $headers, escape: '\\');
                     $headerWritten = true;
                 }
 
